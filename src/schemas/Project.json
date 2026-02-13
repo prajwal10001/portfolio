@@ -1,0 +1,22 @@
+{
+    "uid": "Project",
+    "name": "Projects",
+    "isSingleton": false,
+    "fields": {
+        "description": {
+            "type": "string"
+        },
+        "link": {
+            "type": "string"
+        },
+        "title": {
+            "type": "string"
+        },
+        "tags": {
+            "type": "string"
+        },
+        "image": {
+            "type": "media"
+        }
+    }
+}

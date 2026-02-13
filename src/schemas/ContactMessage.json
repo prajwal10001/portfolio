@@ -1,0 +1,16 @@
+{
+    "uid": "ContactMessage",
+    "name": "Contact Messages",
+    "isSingleton": false,
+    "fields": {
+        "name": {
+            "type": "string"
+        },
+        "email": {
+            "type": "string"
+        },
+        "message": {
+            "type": "string"
+        }
+    }
+}

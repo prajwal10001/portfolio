@@ -1,0 +1,143 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap');
+
+@theme {
+    /* Colors - Dark Theme with Red/Maroon Accent */
+    --color-background: oklch(8% 0.002 248);
+    --color-foreground: rgb(255, 255, 255);
+
+    --color-card: oklch(12% 0.01 248);
+    --color-card-foreground: rgb(255, 255, 255);
+
+    --color-popover: oklch(12% 0.01 248);
+    --color-popover-foreground: rgb(255, 255, 255);
+
+    --color-primary: oklch(50% 0.176 19.4);
+    --color-primary-foreground: rgb(255, 255, 255);
+
+    --color-secondary: oklch(20% 0.01 248);
+    --color-secondary-foreground: rgb(255, 255, 255);
+
+    --color-muted: oklch(20% 0.01 248);
+    --color-muted-foreground: rgba(255, 255, 255, 0.7);
+
+    --color-accent: oklch(20% 0.01 248);
+    --color-accent-foreground: rgb(255, 255, 255);
+
+    --color-destructive: oklch(57.7% 0.245 27.33);
+    --color-destructive-foreground: rgb(255, 255, 255);
+
+    --color-border: rgba(255, 255, 255, 0.1);
+    --color-input: oklch(18% 0.01 248);
+    --color-ring: oklch(50% 0.176 19.4);
+
+    /* Border Radius */
+    --radius: 0.5rem;
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+
+    /* Font */
+    --font-serif: 'Libre Baskerville', Georgia, serif;
+    --font-sans: 'Inter', 'Geist', system-ui, sans-serif;
+}
+
+/* Base Styles */
+* {
+    border-color: var(--color-border);
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+/* Serif heading style */
+.font-serif {
+    font-family: var(--font-serif);
+}
+
+/* Gradient Text Animation */
+.gradient-text {
+    background: linear-gradient(135deg, oklch(0.64 0.15 12) 0%, oklch(0.40 0.18 16) 25%, oklch(0.46 0.16 14) 50%, oklch(0.29 0.17 15) 75%, oklch(0.52 0.16 14) 100%);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 8s ease infinite;
+}
+
+@keyframes gradient-shift {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Button Shine Effect */
+.btn-shine {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-shine::after {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(to bottom right,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0) 40%,
+            rgba(255, 255, 255, 0.1) 50%,
+            rgba(255, 255, 255, 0) 60%,
+            rgba(255, 255, 255, 0) 100%);
+    transform: rotate(45deg);
+    transition: 0.7s;
+}
+
+.btn-shine:hover::after {
+    left: 100%;
+    top: 100%;
+}
+
+/* Grid Background */
+.bg-grid {
+    background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+}
+
+/* Radial Fade Mask */
+.mask-radial-faded {
+    mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
+}
+
+/* Glass effect for badges */
+.glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Expo easing */
+.ease-expo-out {
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}

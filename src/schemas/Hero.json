@@ -1,0 +1,22 @@
+{
+    "uid": "Hero",
+    "name": "Hero Section",
+    "isSingleton": false,
+    "fields": {
+        "tagline": {
+            "type": "string"
+        },
+        "title": {
+            "type": "string"
+        },
+        "secondaryButtonText": {
+            "type": "string"
+        },
+        "primaryButtonText": {
+            "type": "string"
+        },
+        "subtitle": {
+            "type": "string"
+        }
+    }
+}

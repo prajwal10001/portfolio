@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+__pycache__/
+
+# Environment variables
+.env
+.env.local
+.env.local.FIXED
+.env.production
+.env.*.local
+
+# Build output
+dist/
+build/
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+nul
+
+# CSV data files
+*.csv
+
+# Audio/media test files
+*.mp3
+*.wav
+
+# Python files (not part of portfolio)
+*.py
+
+# Misc generated files
+translated_output_report.txt
+compass_artifact_*.md
+
+# Claude / AI assistant folders
+.claude/
+
+# Temporary fix files
+VoiceAgent_FIXED.tsx
+custom_stt_server_fixed.py
+custom_stt_server_fixed_backup.py
+
+# Documentation files not needed in repo
+CODE_REVIEW_SUMMARY.md
+PIPECAT_STT_ISSUES_AND_FIXES.md
+TTS_BEFORE_AFTER.md
+TTS_FIX_COMPLETE.md
+TTS_FIX_DIAGRAM.txt
+TTS_FIX_README.md
+TTS_FIX_SUMMARY.md
+TTS_QUICK_FIX.md
+TTS_TROUBLESHOOTING.md
+QUICK_START.md
+
+# Translations
+translations/
+translations_example1/

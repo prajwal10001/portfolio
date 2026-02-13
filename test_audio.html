@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 8px;
+            border: none;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #connect { background: #0f0; color: #000; }
+        #disconnect { background: #f00; color: #fff; }
+        #speak { background: #ff0; color: #000; font-weight: bold; }
+        #log {
+            background: #000;
+            padding: 10px;
+            margin-top: 20px;
+            height: 500px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+        .info { color: #0ff; }
+        .audio { color: #ff0; }
+        .warning { color: #fa0; }
+        h1 { color: #0ff; }
+        #status {
+            padding: 10px;
+            background: #333;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 Voice Agent Audio Test</h1>
+    <div id="status">Status: <span id="statusText">Disconnected</span></div>
+
+    <button id="connect">1️⃣ Connect to Server</button>
+    <button id="disconnect" disabled>2️⃣ Disconnect</button>
+    <button id="speak" disabled>3️⃣ TEST: Say Hello</button>
+
+    <div id="log"></div>
+
+    <script>
+        const WS_URL = 'ws://localhost:8000/ws/transcribe';
+        let ws = null;
+        let audioContext = null;
+        let nextStartTime = 0;
+        let chunksReceived = 0;
+        let chunksPlayed = 0;
+
+        function updateStatus(text, color = '#fff') {
+            const statusText = document.getElementById('statusText');
+            statusText.textContent = text;
+            statusText.style.color = color;
+        }
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            const timestamp = new Date().toLocaleTimeString() + '.' + new Date().getMilliseconds();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        async function playAudioChunk(base64Data, sampleRate = 24000) {
+            try {
+                chunksReceived++;
+                log(`🎵 Chunk ${chunksReceived}: Decoding (sample rate: ${sampleRate})`, 'audio');
+
+                if (!audioContext) {
+                    log(`❌ AudioContext is null!`, 'error');
+                    return;
+                }
+
+                if (audioContext.state === 'suspended') {
+                    log(`⚠️ AudioContext suspended, resuming...`, 'warning');
+                    await audioContext.resume();
+                }
+
+                const binaryString = window.atob(base64Data);
+                const len = binaryString.length;
+                log(`   └─ Decoded ${len} bytes from base64`, 'audio');
+
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                const int16Data = new Int16Array(bytes.buffer);
+                const float32Data = new Float32Array(int16Data.length);
+                for (let i = 0; i < int16Data.length; i++) {
+                    const s = int16Data[i];
+                    float32Data[i] = s < 0 ? s / 0x8000 : s / 0x7FFF;
+                }
+
+                const audioBuffer = audioContext.createBuffer(1, float32Data.length, sampleRate);
+                audioBuffer.getChannelData(0).set(float32Data);
+                log(`   └─ Audio buffer: ${audioBuffer.duration.toFixed(3)}s (${float32Data.length} samples)`, 'audio');
+
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+
+                const currentTime = audioContext.currentTime;
+                if (nextStartTime < currentTime) {
+                    nextStartTime = currentTime;
+                }
+
+                source.start(nextStartTime);
+                nextStartTime += audioBuffer.duration;
+                chunksPlayed++;
+
+                log(`🔊 PLAYING chunk ${chunksPlayed} at ${nextStartTime.toFixed(3)}s (current: ${currentTime.toFixed(3)}s)`, 'success');
+
+                source.onended = () => {
+                    log(`   ✓ Chunk ${chunksPlayed} playback finished`, 'success');
+                };
+
+            } catch (e) {
+                log(`❌ Error playing audio: ${e.message}`, 'error');
+                console.error('Full error:', e);
+            }
+        }
+
+        // CONNECT BUTTON
+        document.getElementById('connect').onclick = async () => {
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('🔗 CONNECT button clicked', 'info');
+
+            if (ws) {
+                log('⚠️ Already connected!', 'warning');
+                return;
+            }
+
+            updateStatus('Connecting...', '#ff0');
+
+            // Create AudioContext
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    log(`🔊 AudioContext created!`, 'success');
+                    log(`   └─ Sample rate: ${audioContext.sampleRate} Hz`, 'success');
+                    log(`   └─ State: ${audioContext.state}`, 'success');
+                }
+
+                if (audioContext.state === 'suspended') {
+                    log('🔊 Resuming suspended AudioContext...', 'info');
+                    await audioContext.resume();
+                    log(`   └─ New state: ${audioContext.state}`, 'success');
+                }
+            } catch (e) {
+                log(`❌ AudioContext error: ${e.message}`, 'error');
+                return;
+            }
+
+            // Connect WebSocket
+            try {
+                log(`🔌 Creating WebSocket connection to ${WS_URL}`, 'info');
+                ws = new WebSocket(WS_URL);
+                chunksReceived = 0;
+                chunksPlayed = 0;
+                nextStartTime = 0;
+
+                ws.onopen = () => {
+                    log('✅✅✅ WebSocket CONNECTED! ✅✅✅', 'success');
+                    updateStatus('Connected', '#0f0');
+                    document.getElementById('connect').disabled = true;
+                    document.getElementById('disconnect').disabled = false;
+                    document.getElementById('speak').disabled = false;
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`📨 Message type: ${data.type}`, 'info');
+
+                        if (data.type === 'ready') {
+                            log(`✅ Server ready! Session: ${data.session_id}`, 'success');
+
+                        } else if (data.type === 'partial') {
+                            log(`👂 Partial transcript: "${data.text}"`, 'info');
+
+                        } else if (data.type === 'final') {
+                            log(`✅ Final transcript: "${data.text}"`, 'success');
+
+                        } else if (data.type === 'status') {
+                            log(`⏳ Status: ${data.status}`, 'info');
+
+                        } else if (data.type === 'agent_text_partial') {
+                            log(`💬 Agent speaking: "${data.text}"`, 'info');
+
+                        } else if (data.type === 'agent_text_final') {
+                            log(`💬 Agent finished: "${data.text}"`, 'success');
+
+                        } else if (data.type === 'audio_start') {
+                            log(`🎵 ════════ AUDIO STREAM STARTING ════════`, 'audio');
+                            log(`   Format: ${JSON.stringify(data.format)}`, 'audio');
+                            nextStartTime = audioContext.currentTime;
+                            chunksReceived = 0;
+                            chunksPlayed = 0;
+
+                        } else if (data.type === 'audio') {
+                            playAudioChunk(data.data, data.sample_rate || 24000);
+
+                        } else if (data.type === 'audio_end') {
+                            log(`🎵 ════════ AUDIO STREAM COMPLETE ════════`, 'success');
+                            log(`   Total: ${chunksReceived} chunks received, ${chunksPlayed} played`, 'success');
+
+                        } else if (data.type === 'heartbeat') {
+                            log(`💓 Heartbeat`, 'info');
+
+                        } else if (data.type === 'pong') {
+                            log(`🏓 Pong received`, 'info');
+
+                        } else if (data.type === 'error') {
+                            log(`❌ Server error: ${data.message}`, 'error');
+
+                        } else {
+                            log(`📨 Unknown message type: ${data.type}`, 'warning');
+                        }
+
+                    } catch (e) {
+                        log(`❌ JSON parse error: ${e.message}`, 'error');
+                        log(`   Raw data: ${event.data.substring(0, 100)}`, 'error');
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    log(`❌ WebSocket ERROR!`, 'error');
+                    console.error('WebSocket error:', error);
+                    updateStatus('Error', '#f00');
+                };
+
+                ws.onclose = (event) => {
+                    log(`❌ WebSocket CLOSED (code: ${event.code}, reason: ${event.reason})`, 'error');
+                    updateStatus('Disconnected', '#f00');
+                    ws = null;
+                    document.getElementById('connect').disabled = false;
+                    document.getElementById('disconnect').disabled = true;
+                    document.getElementById('speak').disabled = true;
+                };
+
+            } catch (e) {
+                log(`❌ Connection error: ${e.message}`, 'error');
+                console.error('Full error:', e);
+            }
+        };
+
+        // DISCONNECT BUTTON
+        document.getElementById('disconnect').onclick = () => {
+            log('🔌 DISCONNECT button clicked', 'info');
+            if (ws) {
+                ws.close();
+                ws = null;
+                updateStatus('Disconnected', '#f00');
+            }
+        };
+
+        // SPEAK BUTTON
+        document.getElementById('speak').onclick = () => {
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('🎤 SPEAK button clicked!', 'success');
+
+            if (!ws) {
+                log('❌ Not connected!', 'error');
+                return;
+            }
+
+            if (ws.readyState !== WebSocket.OPEN) {
+                log(`❌ WebSocket not ready! State: ${ws.readyState}`, 'error');
+                return;
+            }
+
+            const testText = 'Hello, how are you today?';
+            log(`📤 Sending text input: "${testText}"`, 'info');
+
+            try {
+                const message = JSON.stringify({ type: 'text_input', text: testText });
+                log(`   └─ Message: ${message}`, 'info');
+                ws.send(message);
+                log(`✅ Message sent!`, 'success');
+            } catch (e) {
+                log(`❌ Send error: ${e.message}`, 'error');
+                console.error('Full error:', e);
+            }
+        };
+
+        // Initial log
+        log('🚀 Page loaded. Click "1️⃣ Connect to Server" to start!', 'success');
+    </script>
+</body>
+</html>
