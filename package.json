@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "node server.js",
-    "voice": "node voice-server.js",
+    "voice": "python custom_stt_server_fixed.py",
     "pipecat": "python pipecat_server.py",
     "dev:pipecat": "concurrently \"npm run pipecat\" \"npm run dev\"",
     "dev:full": "concurrently \"npm run voice\" \"npm run dev\"",

@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Mic, MicOff, X, Loader2, Sparkles, AlertCircle, Phone, PhoneOff, Search, Brain, Volume2 } from 'lucide-react'
+import { Mic, MicOff, X, Loader2, Sparkles, AlertCircle, Phone, PhoneOff } from 'lucide-react'
 import { Button } from '@/component/ui/button'
+import { PipecatClient, TranscriptData, BotOutputData, BotLLMTextData, APIRequest } from '@pipecat-ai/client-js'
+import { SmallWebRTCTransport } from '@pipecat-ai/small-webrtc-transport'
 
 interface VoiceAgentProps {
     isOpen: boolean
@@ -14,7 +16,7 @@ interface Message {
     content: string
 }
 
-const WS_URL = 'ws://localhost:3001'
+const CONNECTION_URL = 'http://localhost:8000/api/offer'
 
 export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
     const [isConnected, setIsConnected] = useState(false)
@@ -22,50 +24,75 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
     const [isListening, setIsListening] = useState(false)
     const [isSpeaking, setIsSpeaking] = useState(false)
     const [isProcessing, setIsProcessing] = useState(false)
-    const [isSearching, setIsSearching] = useState(false)
     const [isMicEnabled, setIsMicEnabled] = useState(false)
     const [transcript, setTranscript] = useState('')
+    const [botTranscript, setBotTranscript] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [visualizerData, setVisualizerData] = useState<number[]>(Array(16).fill(5))
     const [messages, setMessages] = useState<Message[]>([])
 
-    const wsRef = useRef<WebSocket | null>(null)
-    const audioContextRef = useRef<AudioContext | null>(null)
-    const mediaStreamRef = useRef<MediaStream | null>(null)
-    const processorRef = useRef<ScriptProcessorNode | null>(null)
+    const clientRef = useRef<PipecatClient | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const animationFrameRef = useRef<number>(0)
-    const audioQueueRef = useRef<ArrayBuffer[]>([])
-    const isPlayingRef = useRef(false)
+    const userTranscriptRef = useRef('')
+    const lastUserFinalRef = useRef('')
+    const botTranscriptRef = useRef('')
+    const botOutputSeenRef = useRef(false)
 
-    const appendMessage = useCallback((role: Message['role'], content: string) => {
+    const appendMessage = useCallback((role: Message['role'], content: string, mergeWithLast = false) => {
         const trimmed = content.trim()
         if (!trimmed) return
-        setMessages(prev => [...prev, { role, content: trimmed }])
+        setMessages(prev => {
+            const last = prev[prev.length - 1]
+            if (mergeWithLast && last && last.role === role) {
+                return [...prev.slice(0, -1), { role, content: last.content + content }]
+            }
+            return [...prev, { role, content: trimmed }]
+        })
     }, [])
+
+    const updateLiveBotTranscript = useCallback((chunk: string) => {
+        if (!chunk) return
+        botTranscriptRef.current = `${botTranscriptRef.current}${chunk}`
+        setBotTranscript(botTranscriptRef.current)
+    }, [])
+
+    const resetBotTranscript = useCallback(() => {
+        botTranscriptRef.current = ''
+        setBotTranscript('')
+    }, [])
+
+    const finalizeUserTranscript = useCallback(() => {
+        const finalText = userTranscriptRef.current.trim()
+        if (finalText && finalText !== lastUserFinalRef.current) {
+            lastUserFinalRef.current = finalText
+            appendMessage('user', finalText)
+        }
+        userTranscriptRef.current = ''
+        setTranscript('')
+    }, [appendMessage])
+
+    const finalizeBotTranscript = useCallback(() => {
+        const finalText = botTranscriptRef.current.trim()
+        if (finalText) {
+            appendMessage('assistant', finalText)
+        }
+        resetBotTranscript()
+    }, [appendMessage, resetBotTranscript])
 
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
         }
-    }, [messages, transcript, isProcessing, isSearching])
+    }, [messages, transcript, botTranscript, isProcessing])
 
-    // Visualizer animation
     useEffect(() => {
-        if (isListening || isSpeaking || isProcessing || isSearching) {
+        if (isListening || isSpeaking || isProcessing) {
             const animateVisualizer = () => {
-                if (isListening) {
+                if (isListening || isSpeaking) {
                     setVisualizerData(prev =>
                         prev.map((_, i) => 10 + Math.sin(Date.now() / 150 + i * 0.3) * 20 + Math.random() * 15)
-                    )
-                } else if (isSpeaking) {
-                    setVisualizerData(prev =>
-                        prev.map((_, i) => 12 + Math.sin(Date.now() / 120 + i * 0.4) * 25 + Math.random() * 10)
-                    )
-                } else if (isSearching) {
-                    setVisualizerData(prev =>
-                        prev.map((_, i) => 8 + Math.sin(Date.now() / 300 + i * 0.6) * 12 + Math.random() * 5)
                     )
                 } else if (isProcessing) {
                     setVisualizerData(prev =>
@@ -81,297 +108,205 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
         }
 
         return () => cancelAnimationFrame(animationFrameRef.current)
-    }, [isListening, isSpeaking, isProcessing, isSearching])
+    }, [isListening, isSpeaking, isProcessing])
 
-    // Play audio from queue
-    const playNextAudio = useCallback(async () => {
-        if (isPlayingRef.current || audioQueueRef.current.length === 0) return
-
-        isPlayingRef.current = true
-        const audioData = audioQueueRef.current.shift()
-
-        if (audioData) {
-            try {
-                const blob = new Blob([audioData], { type: 'audio/mpeg' })
-                const url = URL.createObjectURL(blob)
-
-                if (!audioRef.current) {
-                    audioRef.current = new Audio()
-                }
-
-                audioRef.current.src = url
-                setIsSpeaking(true)
-
-                audioRef.current.onended = () => {
-                    URL.revokeObjectURL(url)
-                    setIsSpeaking(false)
-                    isPlayingRef.current = false
-                    playNextAudio() // Play next in queue
-                }
-
-                audioRef.current.onerror = () => {
-                    URL.revokeObjectURL(url)
-                    setIsSpeaking(false)
-                    isPlayingRef.current = false
-                    playNextAudio()
-                }
-
-                await audioRef.current.play()
-            } catch (err) {
-                console.error('Audio playback error:', err)
-                setIsSpeaking(false)
-                isPlayingRef.current = false
-            }
-        }
-    }, [])
-
-    // Connect to WebSocket voice server
     const connectToAgent = useCallback(async () => {
-        if (isConnected || isConnecting) return
+        if (isConnected || isConnecting || clientRef.current) return
 
         setIsConnecting(true)
         setError(null)
         setMessages([])
         setTranscript('')
+        setBotTranscript('')
+        userTranscriptRef.current = ''
+        lastUserFinalRef.current = ''
+        botTranscriptRef.current = ''
+        botOutputSeenRef.current = false
 
         try {
-            // Request microphone access
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    sampleRate: 16000,
-                    channelCount: 1,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                }
-            })
-            mediaStreamRef.current = stream
+            const transport = new SmallWebRTCTransport()
 
-            // Connect WebSocket
-            const ws = new WebSocket(WS_URL)
-            wsRef.current = ws
-
-            ws.binaryType = 'arraybuffer'
-
-            ws.onopen = () => {
-                console.log('🔗 WebSocket connected')
-                setIsConnected(true)
-                setIsConnecting(false)
-
-                // Setup audio streaming
-                setupAudioStreaming(stream, ws)
-            }
-
-            ws.onmessage = (event) => {
-                if (event.data instanceof ArrayBuffer) {
-                    // Binary audio data from TTS
-                    audioQueueRef.current.push(event.data)
-                    playNextAudio()
-                } else {
-                    // JSON message
-                    try {
-                        const msg = JSON.parse(event.data)
-                        handleServerMessage(msg)
-                    } catch (e) {
-                        console.error('Message parse error:', e)
-                    }
-                }
-            }
-
-            ws.onclose = () => {
-                console.log('🔌 WebSocket disconnected')
-                cleanup()
-            }
-
-            ws.onerror = (err) => {
-                console.error('WebSocket error:', err)
-                setError('Connection failed. Make sure the voice server is running (npm run voice).')
-                cleanup()
-            }
-
-        } catch (err: any) {
-            console.error('Connection error:', err)
-            setError(err?.message || 'Failed to connect. Check microphone permissions.')
-            setIsConnecting(false)
-        }
-    }, [isConnected, isConnecting, playNextAudio])
-
-    // Setup audio streaming from mic to WebSocket
-    const setupAudioStreaming = useCallback((stream: MediaStream, ws: WebSocket) => {
-        const audioContext = new AudioContext({ sampleRate: 16000 })
-        audioContextRef.current = audioContext
-
-        const source = audioContext.createMediaStreamSource(stream)
-        const processor = audioContext.createScriptProcessor(4096, 1, 1)
-        processorRef.current = processor
-
-        processor.onaudioprocess = (e) => {
-            if (ws.readyState === WebSocket.OPEN && isMicEnabled) {
-                const inputData = e.inputBuffer.getChannelData(0)
-                // Convert float32 to int16 PCM
-                const pcmData = new Int16Array(inputData.length)
-                for (let i = 0; i < inputData.length; i++) {
-                    const s = Math.max(-1, Math.min(1, inputData[i]))
-                    pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF
-                }
-                ws.send(pcmData.buffer)
-            }
-        }
-
-        source.connect(processor)
-        processor.connect(audioContext.destination)
-    }, [isMicEnabled])
-
-    // Handle messages from voice server
-    const handleServerMessage = useCallback((msg: any) => {
-        switch (msg.type) {
-            case 'ready':
-                appendMessage('assistant', 'Hi! I\'m Maya, Prajwal\'s AI assistant. Ask me anything about his projects, skills, or experience! 🎤')
-                break
-
-            case 'status':
-                switch (msg.status) {
-                    case 'listening':
+            const client = new PipecatClient({
+                transport,
+                enableMic: false,
+                enableCam: false,
+                callbacks: {
+                    onConnected: async () => {
+                        setIsConnected(true)
+                        setIsConnecting(false)
+                        setError(null)
+                        try {
+                            client.enableMic(true)
+                            setIsMicEnabled(true)
+                        } catch (e: any) {
+                            setError(e?.message || 'Mic permission denied.')
+                        }
+                    },
+                    onDisconnected: () => {
+                        setIsConnected(false)
+                        setIsConnecting(false)
+                        setIsListening(false)
+                        setIsSpeaking(false)
+                        setIsProcessing(false)
+                        setIsMicEnabled(false)
+                    },
+                    onUserStartedSpeaking: () => {
+                        console.log('[VoiceAgent] onUserStartedSpeaking')
                         setIsListening(true)
                         setIsProcessing(false)
-                        setIsSearching(false)
-                        break
-                    case 'searching':
-                        setIsSearching(true)
-                        setIsProcessing(false)
-                        break
-                    case 'thinking':
-                        setIsProcessing(true)
-                        setIsSearching(false)
+                    },
+                    onUserStoppedSpeaking: () => {
+                        console.log('[VoiceAgent] onUserStoppedSpeaking')
                         setIsListening(false)
-                        break
-                    case 'speaking':
+                        setIsProcessing(true)
+                        finalizeUserTranscript()
+                    },
+                    onUserTranscript: (data: TranscriptData) => {
+                        console.log('[VoiceAgent] onUserTranscript:', data)
+                        const text = (data.text || '').trim()
+                        if (data.final) {
+                            if (text) {
+                                userTranscriptRef.current = text
+                            }
+                            finalizeUserTranscript()
+                        } else {
+                            if (text) {
+                                userTranscriptRef.current = text
+                                setTranscript(text)
+                            }
+                        }
+                    },
+                    onBotOutput: (data: BotOutputData) => {
+                        console.log('[VoiceAgent] onBotOutput:', data)
+                        setIsProcessing(false)
+                        botOutputSeenRef.current = true
+                        appendMessage('assistant', data.text, true)
+                    },
+                    onBotTranscript: (data: BotLLMTextData) => {
+                        console.log('[VoiceAgent] onBotTranscript:', data)
+                        updateLiveBotTranscript(data.text)
+                    },
+                    onBotLlmText: (data: BotLLMTextData) => {
+                        console.log('[VoiceAgent] onBotLlmText:', data)
+                        updateLiveBotTranscript(data.text)
+                    },
+                    onBotTtsText: (data) => {
+                        console.log('[VoiceAgent] onBotTtsText:', data)
+                        updateLiveBotTranscript(data.text)
+                    },
+                    onBotStartedSpeaking: () => {
+                        console.log('[VoiceAgent] onBotStartedSpeaking')
                         setIsSpeaking(true)
                         setIsProcessing(false)
-                        setIsSearching(false)
-                        break
-                    case 'idle':
-                        setIsProcessing(false)
-                        setIsSearching(false)
+                        botOutputSeenRef.current = false
+                        resetBotTranscript()
+                    },
+                    onBotStoppedSpeaking: () => {
+                        console.log('[VoiceAgent] onBotStoppedSpeaking')
                         setIsSpeaking(false)
-                        break
-                    case 'reset':
-                        setMessages([])
-                        break
-                }
-                break
+                        if (!botOutputSeenRef.current) {
+                            finalizeBotTranscript()
+                        } else {
+                            resetBotTranscript()
+                        }
+                    },
+                    onMessageError: (error: any) => {
+                        console.log('[VoiceAgent] onMessageError:', error)
+                    },
+                    onTrackStarted: (track: MediaStreamTrack, participant) => {
+                        console.log('[VoiceAgent] Track started:', {
+                            kind: track.kind,
+                            id: track.id,
+                            label: track.label,
+                            enabled: track.enabled,
+                            muted: (track as any).muted,
+                            participant: participant ? { id: participant.id, local: participant.local, name: participant.name } : null,
+                        })
+                        if (participant?.local) {
+                            console.log('[VoiceAgent] Ignoring local track')
+                            return
+                        }
+                        if (track.kind !== 'audio') return
+                        if (!audioRef.current) {
+                            audioRef.current = new Audio()
+                            audioRef.current.autoplay = true
+                        }
+                        const stream = new MediaStream([track])
+                        audioRef.current.srcObject = stream
+                        void audioRef.current.play().catch((err) => {
+                            console.warn('[VoiceAgent] Audio play blocked:', err)
+                            setError('Audio autoplay blocked. Click the page once and try again.')
+                        })
+                    },
+                },
+            })
 
-            case 'interim_transcript':
-                setTranscript(msg.text)
-                setIsListening(true)
-                break
-
-            case 'final_transcript':
-                setTranscript('')
-                appendMessage('user', msg.text)
-                break
-
-            case 'assistant_text':
-                appendMessage('assistant', msg.text)
-                break
-
-            case 'error':
-                setError(msg.message)
-                setIsProcessing(false)
-                setIsSearching(false)
-                break
+            clientRef.current = client
+            const webrtcRequestParams: APIRequest = {
+                endpoint: CONNECTION_URL,
+                headers: new Headers({
+                    'Content-Type': 'application/json',
+                }),
+            }
+            await client.connect({ webrtcRequestParams })
+        } catch (err: any) {
+            const message = err?.message || 'Failed to connect. Make sure the server is running on port 8000.'
+            setError(message)
+            setIsConnecting(false)
+            setIsConnected(false)
         }
-    }, [appendMessage])
+    }, [isConnected, isConnecting])
 
-    // Start/stop listening
-    const toggleMic = useCallback(() => {
-        if (!wsRef.current || !isConnected) return
-
-        const newState = !isMicEnabled
-        setIsMicEnabled(newState)
-
-        if (newState) {
-            wsRef.current.send(JSON.stringify({ type: 'start_listening' }))
-        } else {
-            wsRef.current.send(JSON.stringify({ type: 'stop_listening' }))
-            setIsListening(false)
+    const disconnectFromAgent = useCallback(async () => {
+        if (clientRef.current) {
+            await clientRef.current.disconnect()
+            clientRef.current = null
         }
-    }, [isConnected, isMicEnabled])
-
-    // Cleanup resources
-    const cleanup = useCallback(() => {
-        if (processorRef.current) {
-            processorRef.current.disconnect()
-            processorRef.current = null
-        }
-        if (audioContextRef.current) {
-            audioContextRef.current.close()
-            audioContextRef.current = null
-        }
-        if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(track => track.stop())
-            mediaStreamRef.current = null
-        }
-        if (wsRef.current) {
-            wsRef.current.close()
-            wsRef.current = null
-        }
-        if (audioRef.current) {
-            audioRef.current.pause()
-            audioRef.current = null
-        }
-        audioQueueRef.current = []
-        isPlayingRef.current = false
         setIsConnected(false)
         setIsConnecting(false)
         setIsListening(false)
         setIsSpeaking(false)
         setIsProcessing(false)
-        setIsSearching(false)
         setIsMicEnabled(false)
+        setTranscript('')
+        setBotTranscript('')
+        userTranscriptRef.current = ''
+        lastUserFinalRef.current = ''
+        botTranscriptRef.current = ''
+        botOutputSeenRef.current = false
     }, [])
 
-    const disconnectFromAgent = useCallback(() => {
-        cleanup()
-    }, [cleanup])
+    const toggleMic = useCallback(() => {
+        if (!clientRef.current || !isConnected) return
+        const newState = !isMicEnabled
+        clientRef.current.enableMic(newState)
+        setIsMicEnabled(newState)
+        if (!newState) {
+            setIsListening(false)
+        }
+    }, [isConnected, isMicEnabled])
 
     const handleClose = useCallback(() => {
-        cleanup()
+        disconnectFromAgent()
         setTranscript('')
+        setBotTranscript('')
         setError(null)
         setMessages([])
+        userTranscriptRef.current = ''
+        lastUserFinalRef.current = ''
+        botTranscriptRef.current = ''
+        botOutputSeenRef.current = false
         onClose()
-    }, [cleanup, onClose])
+    }, [disconnectFromAgent, onClose])
 
     useEffect(() => {
         return () => {
-            cleanup()
+            disconnectFromAgent()
             cancelAnimationFrame(animationFrameRef.current)
         }
-    }, [cleanup])
+    }, [disconnectFromAgent])
 
     if (!isOpen) return null
-
-    // Determine current status display
-    const getStatusDisplay = () => {
-        if (isConnecting) return { text: 'Connecting...', icon: null, color: 'text-yellow-400' }
-        if (!isConnected) return { text: 'Not Connected', icon: null, color: 'text-muted-foreground' }
-        if (isSearching) return { text: 'Searching knowledge base...', icon: <Search className="w-3 h-3 animate-pulse" />, color: 'text-emerald-400' }
-        if (isProcessing) return { text: 'Thinking...', icon: <Brain className="w-3 h-3 animate-pulse" />, color: 'text-blue-400' }
-        if (isSpeaking) return { text: 'Speaking...', icon: <Volume2 className="w-3 h-3 animate-pulse" />, color: 'text-indigo-400' }
-        if (isListening) return { text: 'Listening...', icon: <Mic className="w-3 h-3" />, color: 'text-primary' }
-        return { text: isMicEnabled ? 'Ready' : 'Mic Off', icon: null, color: 'text-muted-foreground' }
-    }
-
-    const status = getStatusDisplay()
-
-    // Visualizer bar color based on state
-    const getVisualizerColor = () => {
-        if (isSpeaking) return 'linear-gradient(to top, #6366f1, #818cf8)'
-        if (isSearching) return 'linear-gradient(to top, #10b981, #34d399)'
-        if (isProcessing) return 'linear-gradient(to top, #3b82f6, #60a5fa)'
-        if (isListening) return 'linear-gradient(to top, rgba(178, 52, 62, 0.8), rgba(220, 80, 100, 0.6))'
-        return 'rgba(255, 255, 255, 0.2)'
-    }
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -384,15 +319,11 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
                 className="relative w-full max-w-md mx-4 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
                     <div className="flex items-center gap-3">
                         <div className="relative">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 
-                                ${isSpeaking ? 'bg-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.5)]' :
-                                    isSearching ? 'bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)]' :
-                                        isProcessing ? 'bg-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]' :
-                                            'bg-gradient-to-br from-primary to-primary/60'}`}>
+                                ${isSpeaking ? 'bg-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.5)]' : 'bg-gradient-to-br from-primary to-primary/60'}`}>
                                 <Sparkles className="w-5 h-5 text-white" />
                             </div>
                             {isConnected && (
@@ -401,10 +332,14 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
                             )}
                         </div>
                         <div>
-                            <h3 className="font-semibold text-white">Maya</h3>
-                            <p className={`text-xs flex items-center gap-1.5 ${status.color}`}>
-                                {status.icon}
-                                {status.text}
+                            <h3 className="font-semibold text-white">Voice Agent</h3>
+                            <p className="text-xs text-muted-foreground flex items-center gap-2">
+                                {isConnecting ? 'Connecting...' :
+                                    !isConnected ? 'Not Connected' :
+                                        isProcessing ? <span className="text-blue-400 animate-pulse">Thinking...</span> :
+                                            isSpeaking ? <span className="text-indigo-400 font-medium">Speaking...</span> :
+                                                isListening ? 'Listening...' :
+                                                    'Paused'}
                             </p>
                         </div>
                     </div>
@@ -417,7 +352,7 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
                 </div>
 
                 <div className="p-6 flex flex-col min-h-[350px]">
-                    {/* Visualizer */}
+                    {/* Visualizer - always visible at top */}
                     <div className="flex items-center justify-center mb-4 w-full">
                         <div className="flex items-end justify-center gap-1 h-12">
                             {visualizerData.map((height, index) => (
@@ -426,18 +361,24 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
                                     className="w-1.5 rounded-full transition-all duration-75"
                                     style={{
                                         height: `${Math.min(height, 48)}px`,
-                                        background: getVisualizerColor(),
+                                        background: isSpeaking
+                                            ? 'linear-gradient(to top, #6366f1, #818cf8)'
+                                            : isProcessing
+                                                ? 'linear-gradient(to top, #3b82f6, #60a5fa)'
+                                                : isListening
+                                                    ? 'linear-gradient(to top, rgba(178, 52, 62, 0.8), rgba(220, 80, 100, 0.6))'
+                                                    : 'rgba(255, 255, 255, 0.2)',
                                     }}
                                 />
                             ))}
                         </div>
                     </div>
 
-                    {/* Messages / Transcript area */}
+                    {/* Messages/Transcript area - always visible */}
                     <div className="w-full flex-1 max-h-[250px] overflow-y-auto space-y-3 px-2 custom-scrollbar">
-                        {messages.length === 0 && !transcript && !isProcessing && !isSearching ? (
+                        {messages.length === 0 && !transcript && !isProcessing && !botTranscript ? (
                             <div className="flex items-center justify-center h-full text-white/30 text-sm">
-                                {isConnected ? 'Start speaking...' : 'Click to connect to Maya'}
+                                {isConnected ? 'Start speaking...' : 'Click to connect'}
                             </div>
                         ) : (
                             <>
@@ -463,22 +404,21 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
                                     </div>
                                 )}
 
-                                {/* Searching indicator */}
-                                {isSearching && (
-                                    <div className="flex justify-start">
-                                        <div className="max-w-[85%] p-3 rounded-2xl bg-emerald-500/5 text-emerald-400/70 rounded-tl-sm text-sm flex items-center gap-2 border border-emerald-500/10">
-                                            <Search className="w-3 h-3 animate-pulse" />
-                                            Searching knowledge base...
-                                        </div>
-                                    </div>
-                                )}
-
                                 {/* Processing indicator */}
-                                {isProcessing && !isSearching && (
+                                {isProcessing && (
                                     <div className="flex justify-start">
                                         <div className="max-w-[85%] p-3 rounded-2xl bg-primary/5 text-primary/50 rounded-tl-sm text-sm flex items-center gap-2 border border-primary/10">
                                             <Loader2 className="w-3 h-3 animate-spin" />
                                             Thinking...
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Bot's real-time transcript while speaking */}
+                                {botTranscript && (
+                                    <div className="flex justify-start">
+                                        <div className="max-w-[85%] p-3 rounded-2xl bg-indigo-500/10 text-indigo-300 rounded-tl-sm text-sm italic border border-indigo-500/20">
+                                            <p>{botTranscript}...</p>
                                         </div>
                                     </div>
                                 )}
@@ -495,7 +435,6 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
                     )}
                 </div>
 
-                {/* Controls */}
                 <div className="p-6 border-t border-white/10 flex items-center justify-center gap-4">
                     {!isConnected ? (
                         <Button
@@ -537,10 +476,9 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
                     )}
                 </div>
 
-                {/* Footer */}
                 <div className="px-6 pb-4 text-center">
                     <p className="text-xs text-muted-foreground">
-                        Powered by <span className="text-emerald-400">ChromaDB</span> + <span className="text-primary/80">Azure</span> + <span className="text-indigo-400">Cartesia</span>
+                        Powered by <span className="text-primary/80">Azure</span> + <span className="text-indigo-400">Cartesia</span>
                     </p>
                 </div>
             </div>
