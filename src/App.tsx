@@ -44,6 +44,12 @@ const projects = [
         tags: ['RAG', 'FAISS', 'MongoDB', 'GPT-4'],
         github: 'https://github.com/prajwal10001/Memory_based_RAG_chatbot',
     },
+    {
+        title: 'Text-to-SQL Query Mind',
+        description: 'Intelligent NL-to-SQL platform built at GenXcellence. Converts plain English to optimized SQL with schema awareness, query validation, and result visualization. Uses ChromaDB for knowledge retrieval with sentence-transformers embeddings.',
+        tags: ['LLM', 'ChromaDB', 'SQL', 'GenXcellence'],
+        github: '#',
+    },
 ];
 
 // Hero content for cycling

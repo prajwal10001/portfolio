@@ -1,5 +1,6 @@
-// Real-time Voice Agent WebSocket Server
-// Uses Azure Speech SDK for STT, Azure OpenAI for LLM, Cartesia for TTS
+// Real-time Voice Agent WebSocket Server — Maya AI Assistant
+// Uses ChromaDB RAG + Azure OpenAI for LLM + Cartesia for TTS
+// Azure Speech SDK for STT
 
 import express from 'express';
 import { createServer } from 'http';
@@ -17,33 +18,70 @@ app.use(express.json());
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Maya's system prompt
-const MAYA_SYSTEM_PROMPT = `You are Maya, a friendly AI voice assistant on Prajwal Mandale's portfolio website.
+// RAG Server URL (ChromaDB + Sentence Transformers)
+const RAG_SERVER_URL = process.env.RAG_SERVER_URL || 'http://localhost:8001';
+
+// Maya's system prompt — enhanced with RAG context
+const MAYA_SYSTEM_PROMPT = `You are Maya, a friendly and knowledgeable AI voice assistant on Prajwal Mandale's portfolio website.
 
 Your role is to:
 - Help visitors learn about Prajwal's experience, skills, and projects
-- Answer questions about his work in AI, Machine Learning, and Voice AI
+- Answer questions about his work in AI, Machine Learning, Voice AI, RAG systems, and more
+- Explain his projects like Semantic Chunker (LangChain), Real-time Voice AI Agent, Document Intelligence, Memory Based RAG Chatbot, and Text-to-SQL Query Mind from GenXcellence
 - Be warm, professional, and conversational
-- Keep responses concise (1-2 sentences max for voice)
+- Keep responses concise (2-3 sentences max for voice) but informative
 
 Key facts about Prajwal:
-- AI Engineer & Architect specializing in Generative AI, LLMs, and Scalable Infrastructure
-- Expertise in Voice AI (Pipecat, Cartesia TTS, real-time streaming)
-- Experience with RAG systems, Vector databases, and LLM applications
-- Projects: Voice AI Agent (<500ms latency), RAG Knowledge Base, Computer Vision Pipeline
-- Tech stack: Python, TypeScript, PyTorch, Azure, Pipecat, Cartesia
+- AI Engineer & Architect at GenXcellence specializing in Generative AI, LLMs, and Scalable Infrastructure
+- Built Text-to-SQL Query Mind at GenXcellence — converts natural language to optimized SQL queries
+- Expertise in Voice AI (Pipecat, Cartesia TTS, Azure STT, real-time streaming)
+- Experience with RAG systems (ChromaDB, FAISS, LangChain, vector databases)
+- Projects: Semantic Chunker, Voice AI Agent, Document Intelligence, RAG Chatbot, Text-to-SQL
+- Tech stack: Python, TypeScript, PyTorch, Azure, Pipecat, Cartesia, LangChain, FAISS, ChromaDB
+
+You use ChromaDB with sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 for fetching relevant knowledge.
+When provided with CONTEXT from the knowledge base, use it to give accurate, detailed answers.
+If no context is provided or the question is off-topic, answer based on your general knowledge about Prajwal.
 
 Respond naturally as if in a spoken conversation. Be brief and engaging!`;
 
-// Azure OpenAI Chat
-async function getChatResponse(messages) {
+// ==================== RAG: Query ChromaDB ====================
+async function queryKnowledgeBase(query) {
+    try {
+        const response = await fetch(`${RAG_SERVER_URL}/query`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, n_results: 3 }),
+        });
+
+        if (!response.ok) {
+            console.warn('⚠️ RAG server not available, proceeding without context');
+            return null;
+        }
+
+        const data = await response.json();
+        return data.context || null;
+    } catch (error) {
+        console.warn('⚠️ RAG query failed:', error.message);
+        return null;
+    }
+}
+
+// ==================== Azure OpenAI Chat ====================
+async function getChatResponse(messages, ragContext = null) {
     const apiKey = process.env.AZURE_OPENAI_API_KEY;
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
     const deployment = process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-35-turbo';
     const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2024-02-15-preview';
 
+    // Build system prompt with RAG context if available
+    let systemContent = MAYA_SYSTEM_PROMPT;
+    if (ragContext) {
+        systemContent += `\n\n--- RELEVANT KNOWLEDGE BASE CONTEXT ---\n${ragContext}\n--- END CONTEXT ---\n\nUse the above context to give an accurate and detailed answer. If the context doesn't cover the question, use your general knowledge about Prajwal.`;
+    }
+
     const fullMessages = [
-        { role: 'system', content: MAYA_SYSTEM_PROMPT },
+        { role: 'system', content: systemContent },
         ...messages
     ];
 
@@ -57,7 +95,7 @@ async function getChatResponse(messages) {
         },
         body: JSON.stringify({
             messages: fullMessages,
-            max_tokens: 100,
+            max_tokens: 150,
             temperature: 0.6,
         }),
     });
@@ -70,7 +108,7 @@ async function getChatResponse(messages) {
     return data.choices[0]?.message?.content || 'Sorry, I could not respond.';
 }
 
-// Cartesia TTS - returns audio buffer
+// ==================== Cartesia TTS ====================
 async function synthesizeSpeech(text) {
     const apiKey = process.env.CARTESIA_API_KEY;
     const voiceId = process.env.CARTESIA_VOICE_ID || 'f786b574-daa5-4673-aa0c-cbe3e8534c02';
@@ -85,10 +123,9 @@ async function synthesizeSpeech(text) {
         body: JSON.stringify({
             model_id: 'sonic-3',
             transcript: text,
-            voice: { 
-                mode: 'id', 
+            voice: {
+                mode: 'id',
                 id: voiceId,
-                // Optional: Control speech characteristics
                 __experimental_controls: {
                     speed: 'fast',
                     emotion: ['positivity:high']
@@ -97,7 +134,7 @@ async function synthesizeSpeech(text) {
             output_format: {
                 container: 'mp3',
                 encoding: 'mp3',
-                sample_rate: 24000, // Native Cartesia sample rate
+                sample_rate: 24000,
                 bit_rate: 128000,
             },
             language: 'en',
@@ -111,7 +148,53 @@ async function synthesizeSpeech(text) {
     return await response.arrayBuffer();
 }
 
-// WebSocket connection handling
+// ==================== Process User Message with RAG ====================
+async function processUserMessage(userText, conversationHistory, ws) {
+    try {
+        // Step 1: Query ChromaDB for relevant knowledge
+        ws.send(JSON.stringify({ type: 'status', status: 'searching' }));
+        console.log(`🔍 Querying RAG knowledge base for: "${userText}"`);
+        const ragContext = await queryKnowledgeBase(userText);
+
+        if (ragContext) {
+            console.log(`📚 Found relevant context (${ragContext.length} chars)`);
+        } else {
+            console.log(`📭 No RAG context available, using base knowledge`);
+        }
+
+        // Step 2: Get LLM response with RAG context
+        ws.send(JSON.stringify({ type: 'status', status: 'thinking' }));
+        const response = await getChatResponse(conversationHistory, ragContext);
+        console.log(`🤖 Maya: ${response}`);
+
+        conversationHistory.push({ role: 'assistant', content: response });
+
+        ws.send(JSON.stringify({
+            type: 'assistant_text',
+            text: response
+        }));
+
+        // Step 3: Generate TTS audio
+        ws.send(JSON.stringify({ type: 'status', status: 'speaking' }));
+        const audioBuffer = await synthesizeSpeech(response);
+
+        // Send audio as binary
+        ws.send(audioBuffer);
+
+        ws.send(JSON.stringify({ type: 'status', status: 'idle' }));
+
+        return response;
+    } catch (error) {
+        console.error('Processing error:', error);
+        ws.send(JSON.stringify({
+            type: 'error',
+            message: 'Failed to process. Please try again.'
+        }));
+        return null;
+    }
+}
+
+// ==================== WebSocket Connection Handling ====================
 wss.on('connection', (ws) => {
     console.log('🎤 New voice client connected');
 
@@ -162,35 +245,8 @@ wss.on('connection', (ws) => {
                 // Add to history
                 conversationHistory.push({ role: 'user', content: userText });
 
-                try {
-                    // Get LLM response
-                    ws.send(JSON.stringify({ type: 'status', status: 'thinking' }));
-                    const response = await getChatResponse(conversationHistory);
-                    console.log(`🤖 Maya: ${response}`);
-
-                    conversationHistory.push({ role: 'assistant', content: response });
-
-                    ws.send(JSON.stringify({
-                        type: 'assistant_text',
-                        text: response
-                    }));
-
-                    // Get TTS audio
-                    ws.send(JSON.stringify({ type: 'status', status: 'speaking' }));
-                    const audioBuffer = await synthesizeSpeech(response);
-
-                    // Send audio as binary
-                    ws.send(audioBuffer);
-
-                    ws.send(JSON.stringify({ type: 'status', status: 'idle' }));
-
-                } catch (error) {
-                    console.error('Processing error:', error);
-                    ws.send(JSON.stringify({
-                        type: 'error',
-                        message: 'Failed to process. Please try again.'
-                    }));
-                }
+                // Process with RAG pipeline
+                await processUserMessage(userText, conversationHistory, ws);
             }
         };
 
@@ -251,18 +307,7 @@ wss.on('connection', (ws) => {
                         // Direct text input (fallback)
                         if (message.text) {
                             conversationHistory.push({ role: 'user', content: message.text });
-
-                            ws.send(JSON.stringify({ type: 'status', status: 'thinking' }));
-                            const response = await getChatResponse(conversationHistory);
-                            conversationHistory.push({ role: 'assistant', content: response });
-
-                            ws.send(JSON.stringify({ type: 'assistant_text', text: response }));
-
-                            ws.send(JSON.stringify({ type: 'status', status: 'speaking' }));
-                            const audioBuffer = await synthesizeSpeech(response);
-                            ws.send(audioBuffer);
-
-                            ws.send(JSON.stringify({ type: 'status', status: 'idle' }));
+                            await processUserMessage(message.text, conversationHistory, ws);
                         }
                         break;
 
@@ -291,20 +336,42 @@ wss.on('connection', (ws) => {
     // Send ready status
     ws.send(JSON.stringify({
         type: 'ready',
-        message: 'Maya is ready to chat!'
+        message: 'Maya is ready to chat! Ask me about Prajwal\'s projects, skills, or experience.'
     }));
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', service: 'voice-agent' });
+// ==================== HTTP Endpoints ====================
+
+// Health check
+app.get('/health', async (req, res) => {
+    // Also check RAG server health
+    let ragStatus = 'unknown';
+    try {
+        const ragHealth = await fetch(`${RAG_SERVER_URL}/health`);
+        if (ragHealth.ok) {
+            const data = await ragHealth.json();
+            ragStatus = `ok (${data.collection_count} docs)`;
+        }
+    } catch {
+        ragStatus = 'offline';
+    }
+
+    res.json({
+        status: 'ok',
+        service: 'maya-voice-agent',
+        rag: ragStatus,
+    });
 });
 
-// HTTP fallback endpoints (same as before)
+// HTTP chat endpoint (with RAG)
 app.post('/api/chat', async (req, res) => {
     try {
         const { messages } = req.body;
-        const response = await getChatResponse(messages || []);
+        const lastMessage = messages?.[messages.length - 1]?.content || '';
+
+        // Query RAG
+        const ragContext = await queryKnowledgeBase(lastMessage);
+        const response = await getChatResponse(messages || [], ragContext);
         res.json({ message: response });
     } catch (error) {
         console.error('Chat error:', error);
@@ -312,6 +379,7 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
+// HTTP TTS endpoint
 app.post('/api/tts', async (req, res) => {
     try {
         const { text } = req.body;
@@ -324,12 +392,22 @@ app.post('/api/tts', async (req, res) => {
     }
 });
 
+// ==================== Start Server ====================
 const PORT = 3001;
 server.listen(PORT, () => {
-    console.log(`\n🎤 Voice Agent WebSocket Server running on http://localhost:${PORT}`);
+    console.log(`\n🎤 Maya Voice Agent Server running on http://localhost:${PORT}`);
     console.log(`📡 WebSocket: ws://localhost:${PORT}`);
+    console.log(`\n🧠 RAG Server: ${RAG_SERVER_URL}`);
     console.log(`\n✅ Services:`);
     console.log(`   Azure Speech (STT): ${process.env.AZURE_SPEECH_KEY ? '✓' : '✗'}`);
     console.log(`   Azure OpenAI (LLM): ${process.env.AZURE_OPENAI_API_KEY ? '✓' : '✗'}`);
     console.log(`   Cartesia (TTS): ${process.env.CARTESIA_API_KEY ? '✓' : '✗'}`);
+    console.log(`   ChromaDB RAG: checking...`);
+
+    // Check RAG server on startup
+    fetch(`${RAG_SERVER_URL}/health`).then(r => r.json()).then(d => {
+        console.log(`   ChromaDB RAG: ✓ (${d.collection_count} documents)`);
+    }).catch(() => {
+        console.log(`   ChromaDB RAG: ✗ (start with: python rag-server.py)`);
+    });
 });

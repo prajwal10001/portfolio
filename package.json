@@ -7,9 +7,11 @@
     "dev": "vite",
     "server": "node server.js",
     "voice": "node voice-server.js",
+    "rag": "python rag-server.py",
     "pipecat": "python pipecat_server.py",
     "dev:pipecat": "concurrently \"npm run pipecat\" \"npm run dev\"",
     "dev:full": "concurrently \"npm run voice\" \"npm run dev\"",
+    "dev:maya": "concurrently \"npm run rag\" \"npm run voice\" \"npm run dev\"",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

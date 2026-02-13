@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 __pycache__/
+chroma_db/
+venv/
+.venv/
 
 # Environment variables
 .env
