@@ -200,6 +200,8 @@ class RAGProcessor(FrameProcessor):
         super().__init__()
 
     async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+
         if isinstance(frame, TextFrame):
             # Query knowledge base
             logger.info(f"🔍 RAG Lookup for: {frame.text}")
