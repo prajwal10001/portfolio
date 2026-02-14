@@ -1,15 +1,15 @@
 /**
  * Pipecat Voice Agent Component
  * ==============================
- * Connects to Pipecat WebSocket server for ultra-low latency voice AI.
- * 
- * Uses @pipecat-ai/client-js and @pipecat-ai/websocket-transport
+ * Connects to Pipecat SmallWebRTC server for ultra-low latency voice AI.
+ *
+ * Uses @pipecat-ai/client-js and @pipecat-ai/small-webrtc-transport
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Mic, MicOff, Phone, PhoneOff, Volume2 } from 'lucide-react'
 import { PipecatClient, TranscriptData, BotOutputData } from '@pipecat-ai/client-js'
-import { WebSocketTransport, ProtobufFrameSerializer } from '@pipecat-ai/websocket-transport'
+import { SmallWebRTCTransport } from '@pipecat-ai/small-webrtc-transport'
 
 type Status = 'idle' | 'connecting' | 'connected' | 'listening' | 'processing' | 'speaking' | 'error'
 
@@ -22,6 +22,8 @@ const STATUS_MESSAGES: Record<Status, string> = {
     speaking: 'Maya is speaking...',
     error: 'Connection error. Try again.',
 }
+
+const BACKEND_URL = 'http://localhost:8000'
 
 export default function PipecatVoiceAgent() {
     const [status, setStatus] = useState<Status>('idle')
@@ -42,11 +44,11 @@ export default function PipecatVoiceAgent() {
         setError(null)
 
         try {
-            const transport = new WebSocketTransport({
-                wsUrl: 'ws://localhost:8765',
-                recorderSampleRate: 16000,
-                playerSampleRate: 24000,
-                serializer: new ProtobufFrameSerializer(),
+            const transport = new SmallWebRTCTransport({
+                baseUrl: BACKEND_URL,
+                endpoint: '/api/offer',
+                enableMic: true,
+                enableCam: false,
             })
 
             const client = new PipecatClient({
@@ -55,33 +57,32 @@ export default function PipecatVoiceAgent() {
                 enableCam: false,
                 callbacks: {
                     onConnected: () => {
-                        console.log('✅ Connected to Pipecat server')
+                        console.log('Connected to Pipecat server')
                         setIsConnected(true)
+                        setIsMicEnabled(true)
                         setStatus('connected')
                         setError(null)
                     },
                     onDisconnected: () => {
-                        console.log('❌ Disconnected from Pipecat server')
+                        console.log('Disconnected from Pipecat server')
                         setIsConnected(false)
                         setStatus('idle')
                     },
                     onBotStartedSpeaking: () => {
-                        console.log('🔊 Maya started speaking')
                         setStatus('speaking')
                     },
                     onBotStoppedSpeaking: () => {
-                        console.log('🔇 Maya stopped speaking')
                         setStatus('connected')
                     },
                     onUserTranscript: (data: TranscriptData) => {
-                        console.log('📝 Transcript:', data)
+                        console.log('Transcript:', data)
                         setTranscript(data.text)
                         if (data.final) {
                             setStatus('processing')
                         }
                     },
                     onBotOutput: (data: BotOutputData) => {
-                        console.log('💬 Maya:', data.text)
+                        console.log('Maya:', data.text)
                         setAgentResponse(data.text)
                     },
                     onLocalAudioLevel: (level: number) => {
@@ -98,12 +99,11 @@ export default function PipecatVoiceAgent() {
 
             clientRef.current = client
 
-            // Connect to the WebSocket server
             await client.connect()
 
         } catch (err: any) {
             console.error('Connection failed:', err)
-            setError(err.message || 'Failed to connect. Make sure pipecat_server.py is running.')
+            setError(err.message || 'Failed to connect. Make sure the voice server is running.')
             setStatus('error')
         }
     }, [])
@@ -310,7 +310,7 @@ export default function PipecatVoiceAgent() {
                     {/* Latency indicator */}
                     <div className="px-4 pb-4 text-center">
                         <span className="text-xs text-gray-500">
-                            ⚡ Pipecat • ~300ms latency
+                            Pipecat WebRTC
                         </span>
                     </div>
                 </div>

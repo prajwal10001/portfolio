@@ -204,16 +204,14 @@ class RAGProcessor(FrameProcessor):
             # Query knowledge base
             logger.info(f"🔍 RAG Lookup for: {frame.text}")
             context = knowledge_base.query(frame.text)
-            
+
             if context:
                 logger.info(f"📚 Found context ({len(context)} chars)")
-                # Append context to the user's message invisibly (or visibly in logs)
-                # The LLM will see this because context_aggregator comes AFTER this processor
                 original_text = frame.text
                 frame.text = f"{original_text}\n\n[Relevant Knowledge Context]:\n{context}"
             else:
                 logger.info("📭 No context found")
-        
+
         await self.push_frame(frame, direction)
 
 # ==================== PIPECAT APP ====================
@@ -314,6 +312,13 @@ async def webrtc_offer(request: Request):
         asyncio.create_task(run_voice_agent(conn))
     answer = await small_webrtc_handler.handle_web_request(webrtc_request, cb)
     return JSONResponse(answer or {})
+
+@app.patch("/api/offer/{connection_id}")
+async def webrtc_patch(connection_id: str, request: Request):
+    body = await request.json()
+    patch_request = SmallWebRTCPatchRequest(connection_id=connection_id, ice_candidate=IceCandidate(**body))
+    await small_webrtc_handler.handle_patch_request(patch_request)
+    return JSONResponse({"status": "ok"})
 
 import uvicorn
 if __name__ == "__main__":
