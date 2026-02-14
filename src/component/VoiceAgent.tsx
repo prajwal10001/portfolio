@@ -250,7 +250,7 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
             }
             await client.connect({ webrtcRequestParams })
         } catch (err: any) {
-            const message = err?.message || 'Failed to connect. Make sure the server is running on port 8000.'
+            const message = err?.message || 'Failed to connect. Please check the VITE_BACKEND_URL configuration.'
             setError(message)
             setIsConnecting(false)
             setIsConnected(false)
