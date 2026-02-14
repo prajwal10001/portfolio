@@ -16,7 +16,7 @@ interface Message {
     content: string
 }
 
-const CONNECTION_URL = 'http://localhost:8000/api/offer'
+const CONNECTION_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000') + '/api/offer'
 
 export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
     const [isConnected, setIsConnected] = useState(false)
