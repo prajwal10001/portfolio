@@ -6,3 +6,4 @@ pymongo
 pyjwt
 openai
 cartesia
+aiortc
