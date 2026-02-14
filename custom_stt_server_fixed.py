@@ -22,9 +22,10 @@ from cartesia import AsyncCartesia
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.pipeline.runner import PipelineRunner
-from pipecat.services.azure import AzureSTTService, AzureLLMService
-from pipecat.services.openai import OpenAILLMService
-from pipecat.services.cartesia import CartesiaTTSService
+from pipecat.services.azure.stt import AzureSTTService
+from pipecat.services.azure.llm import AzureLLMService
+from pipecat.services.openai.base_llm import BaseOpenAILLMService
+from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCConnection
@@ -251,7 +252,7 @@ async def run_voice_agent(webrtc_connection: SmallWebRTCConnection):
         endpoint=AZURE_OPENAI_ENDPOINT,
         model=AZURE_OPENAI_DEPLOYMENT,
         api_version=AZURE_OPENAI_API_VERSION,
-        params=OpenAILLMService.InputParams(temperature=0.6),
+        params=BaseOpenAILLMService.InputParams(temperature=0.6),
     )
 
     tts = CartesiaTTSService(
