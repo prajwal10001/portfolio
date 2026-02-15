@@ -319,10 +319,13 @@ async def webrtc_offer(request: Request):
     answer = await small_webrtc_handler.handle_web_request(webrtc_request, cb)
     return JSONResponse(answer or {})
 
-@app.patch("/api/offer/{connection_id}")
-async def webrtc_patch(connection_id: str, request: Request):
+@app.patch("/api/offer")
+async def webrtc_offer_patch(request: Request):
     body = await request.json()
-    patch_request = SmallWebRTCPatchRequest(connection_id=connection_id, ice_candidate=IceCandidate(**body))
+    patch_request = SmallWebRTCPatchRequest(
+        pc_id=body.get("pc_id") or body.get("connection_id"),
+        candidates=[IceCandidate(**c) for c in body.get("candidates", [])] if body.get("candidates") else [IceCandidate(**body)] if "candidate" in body else [],
+    )
     await small_webrtc_handler.handle_patch_request(patch_request)
     return JSONResponse({"status": "ok"})
 
