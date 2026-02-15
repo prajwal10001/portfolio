@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Mic, MicOff, X, Loader2, Sparkles, AlertCircle, Phone, PhoneOff } from 'lucide-react'
+import { X, Loader2, Sparkles, AlertCircle, Phone, PhoneOff } from 'lucide-react'
 import { Button } from '@/component/ui/button'
 import { PipecatClient, TranscriptData, BotOutputData, BotLLMTextData } from '@pipecat-ai/client-js'
 import { WebSocketTransport } from '@pipecat-ai/websocket-transport'
@@ -41,7 +41,6 @@ export function VoiceAgentWebSocket({ isOpen, onClose }: VoiceAgentProps) {
     const [isListening, setIsListening] = useState(false)
     const [isSpeaking, setIsSpeaking] = useState(false)
     const [isProcessing, setIsProcessing] = useState(false)
-    const [isMicEnabled, setIsMicEnabled] = useState(false)
     const [transcript, setTranscript] = useState('')
     const [botTranscript, setBotTranscript] = useState('')
     const [error, setError] = useState<string | null>(null)
@@ -154,7 +153,6 @@ export function VoiceAgentWebSocket({ isOpen, onClose }: VoiceAgentProps) {
                         setError(null)
                         try {
                             client.enableMic(true)
-                            setIsMicEnabled(true)
                         } catch (e: any) {
                             setError(e?.message || 'Mic permission denied.')
                         }
@@ -166,7 +164,6 @@ export function VoiceAgentWebSocket({ isOpen, onClose }: VoiceAgentProps) {
                         setIsListening(false)
                         setIsSpeaking(false)
                         setIsProcessing(false)
-                        setIsMicEnabled(false)
                     },
                     onUserStartedSpeaking: () => {
                         console.log('[WebSocket] User started speaking')
