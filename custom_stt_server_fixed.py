@@ -233,9 +233,9 @@ async def get_ws_token(request: Request):
 
 small_webrtc_handler = SmallWebRTCRequestHandler(
     ice_servers=[
-        {"urls": "stun:stun.l.google.com:19302"},
-        {"urls": "stun:stun1.l.google.com:19302"},
-        {"urls": "stun:stun2.l.google.com:19302"},
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+        "stun:stun2.l.google.com:19302",
     ]
 )
 
