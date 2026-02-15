@@ -124,6 +124,20 @@ export function VoiceAgent({ isOpen, onClose }: VoiceAgentProps) {
         botOutputSeenRef.current = false
 
         try {
+            // Wake up the backend if it's sleeping (Render free tier)
+            const backendBase = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:8000'
+            try {
+                const wakeUp = await fetch(backendBase, { method: 'GET', signal: AbortSignal.timeout(45000) })
+                if (!wakeUp.ok) {
+                    console.warn('[VoiceAgent] Backend health check returned:', wakeUp.status)
+                }
+            } catch (e: any) {
+                console.warn('[VoiceAgent] Backend may be waking up:', e?.message)
+                setError('Backend is starting up (free tier cold start). Please wait a moment and try again.')
+                setIsConnecting(false)
+                return
+            }
+
             const transport = new SmallWebRTCTransport()
 
             const client = new PipecatClient({
