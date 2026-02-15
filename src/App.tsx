@@ -5,7 +5,7 @@ import { Badge } from '@/component/ui/badge';
 import { Input } from '@/component/ui/input';
 import { Textarea } from '@/component/ui/textarea';
 import { WaveBackground } from '@/component/WaveBackground';
-import { VoiceAgent } from '@/component/VoiceAgent';
+import { VoiceAgentWebSocket } from '@/component/VoiceAgentWebSocket';
 // import PipecatVoiceAgent from '@/component/PipecatVoiceAgent';
 import {
     Github,
@@ -348,8 +348,8 @@ function App() {
                 </div>
             </footer>
 
-            {/* Voice Agent Modal */}
-            <VoiceAgent
+            {/* Voice Agent Modal - WebSocket Version */}
+            <VoiceAgentWebSocket
                 isOpen={isVoiceAgentOpen}
                 onClose={() => setIsVoiceAgentOpen(false)}
             />

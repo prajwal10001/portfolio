@@ -10,7 +10,7 @@ from datetime import timezone
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 import jwt
 from pymongo import MongoClient
