@@ -81,10 +81,6 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "service": "Maya Voice Agent"}
 
-@app.head("/")
-async def health_check_head():
-    return JSONResponse(content=None, status_code=200)
-
 # ==================== KNOWLEDGE BASE (RAG) ====================
 KNOWLEDGE_DOCUMENTS = [
     {
