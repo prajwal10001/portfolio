@@ -231,7 +231,13 @@ async def get_ws_token(request: Request):
     )
     return JSONResponse({"token": token, "expires_in": 600})
 
-small_webrtc_handler = SmallWebRTCRequestHandler()
+small_webrtc_handler = SmallWebRTCRequestHandler(
+    ice_servers=[
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+        {"urls": "stun:stun2.l.google.com:19302"},
+    ]
+)
 
 async def run_voice_agent(webrtc_connection: SmallWebRTCConnection):
     vad = SileroVADAnalyzer(params=VADParams(confidence=0.6, start_secs=0.1, stop_secs=0.4))
