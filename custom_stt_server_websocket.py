@@ -202,87 +202,102 @@ async def get_ws_token():
 async def run_voice_agent(websocket: WebSocket):
     """Run the voice agent with WebSocket transport"""
 
-    logger.info("✅ WebSocket connection started")
-    
-    # VAD for voice activity detection
-    vad = SileroVADAnalyzer(params=VADParams(confidence=0.6, start_secs=0.1, stop_secs=0.4))
-    
-    # WebSocket transport
-    transport = FastAPIWebsocketTransport(
-        websocket=websocket,
-        params=FastAPIWebsocketParams(
-            audio_in_enabled=True,
-            audio_out_enabled=True,
-            audio_in_sample_rate=16000,
-            audio_out_sample_rate=24000,
-            vad_enabled=True,
-            vad_analyzer=vad,
-            vad_audio_passthrough=True,
-        ),
-        callbacks=FastAPIWebsocketCallbacks(
-            on_client_connected=lambda ws: logger.info("🎙️ Client connected"),
-            on_client_disconnected=lambda ws: logger.info("👋 Client disconnected"),
-            on_session_timeout=lambda ws: logger.warning("⏱️ Session timeout"),
-        ),
-    )
-
-    # STT Service
-    stt = AzureSTTService(
-        api_key=AZURE_SPEECH_KEY,
-        region=AZURE_SPEECH_REGION,
-        language="en-US",
-    )
-
-    # LLM Service
-    llm = AzureLLMService(
-        api_key=AZURE_OPENAI_API_KEY,
-        endpoint=AZURE_OPENAI_ENDPOINT,
-        model=AZURE_OPENAI_DEPLOYMENT,
-        api_version=AZURE_OPENAI_API_VERSION,
-        params=BaseOpenAILLMService.InputParams(temperature=0.6),
-    )
-
-    # TTS Service
-    tts = CartesiaTTSService(
-        api_key=CARTESIA_API_KEY,
-        voice_id=CARTESIA_VOICE_ID,
-        model_id="sonic-3",
-        sample_rate=24000,
-    )
-
-    # Context and aggregator
-    messages = [
-        {
-            "role": "system", 
-            "content": "You are Maya, Prajwal's AI assistant. Answer questions about his projects (Text-to-SQL, Voice Agent, RAG Chatbot) using the provided context. Be concise (2 sentences max)."
-        }
-    ]
-    context = OpenAILLMContext(messages)
-    context_aggregator = llm.create_context_aggregator(context)
-    
-    # RAG processor
-    rag_processor = RAGProcessor()
-
-    # Pipeline
-    pipeline = Pipeline([
-        transport.input(),
-        stt,
-        rag_processor,
-        context_aggregator.user(),
-        llm,
-        tts,
-        transport.output(),
-        context_aggregator.assistant(),
-    ])
-
-    task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
-    
-    runner = PipelineRunner()
-    
     try:
+        # Accept the websocket connection first
+        await websocket.accept()
+        logger.info("✅ WebSocket connection accepted")
+
+        # VAD for voice activity detection
+        logger.info("🔧 Initializing VAD...")
+        vad = SileroVADAnalyzer(params=VADParams(confidence=0.6, start_secs=0.1, stop_secs=0.4))
+
+        # WebSocket transport
+        logger.info("🔧 Creating WebSocket transport...")
+        transport = FastAPIWebsocketTransport(
+            websocket=websocket,
+            params=FastAPIWebsocketParams(
+                audio_in_enabled=True,
+                audio_out_enabled=True,
+                audio_in_sample_rate=16000,
+                audio_out_sample_rate=24000,
+                vad_enabled=True,
+                vad_analyzer=vad,
+                vad_audio_passthrough=True,
+            ),
+            callbacks=FastAPIWebsocketCallbacks(
+                on_client_connected=lambda ws: logger.info("🎙️ Client connected via transport"),
+                on_client_disconnected=lambda ws: logger.info("👋 Client disconnected via transport"),
+                on_session_timeout=lambda ws: logger.warning("⏱️ Session timeout"),
+            ),
+        )
+        logger.info("✅ Transport created")
+
+        # STT Service
+        logger.info("🔧 Initializing STT...")
+        stt = AzureSTTService(
+            api_key=AZURE_SPEECH_KEY,
+            region=AZURE_SPEECH_REGION,
+            language="en-US",
+        )
+        logger.info("✅ STT initialized")
+
+        # LLM Service
+        logger.info("🔧 Initializing LLM...")
+        llm = AzureLLMService(
+            api_key=AZURE_OPENAI_API_KEY,
+            endpoint=AZURE_OPENAI_ENDPOINT,
+            model=AZURE_OPENAI_DEPLOYMENT,
+            api_version=AZURE_OPENAI_API_VERSION,
+            params=BaseOpenAILLMService.InputParams(temperature=0.6),
+        )
+        logger.info("✅ LLM initialized")
+
+        # TTS Service
+        logger.info("🔧 Initializing TTS...")
+        tts = CartesiaTTSService(
+            api_key=CARTESIA_API_KEY,
+            voice_id=CARTESIA_VOICE_ID,
+            model_id="sonic-3",
+            sample_rate=24000,
+        )
+        logger.info("✅ TTS initialized")
+
+        # Context and aggregator
+        messages = [
+            {
+                "role": "system",
+                "content": "You are Maya, Prajwal's AI assistant. Answer questions about his projects (Text-to-SQL, Voice Agent, RAG Chatbot) using the provided context. Be concise (2 sentences max)."
+            }
+        ]
+        context = OpenAILLMContext(messages)
+        context_aggregator = llm.create_context_aggregator(context)
+
+        # RAG processor
+        rag_processor = RAGProcessor()
+
+        # Pipeline
+        logger.info("🔧 Building pipeline...")
+        pipeline = Pipeline([
+            transport.input(),
+            stt,
+            rag_processor,
+            context_aggregator.user(),
+            llm,
+            tts,
+            transport.output(),
+            context_aggregator.assistant(),
+        ])
+        logger.info("✅ Pipeline built")
+
+        task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
+
+        runner = PipelineRunner()
+
+        logger.info("🚀 Starting pipeline runner...")
         await runner.run(task)
+
     except Exception as e:
-        logger.error(f"❌ Pipeline error: {e}")
+        logger.error(f"❌ Pipeline error: {e}", exc_info=True)
     finally:
         logger.info("🛑 Pipeline stopped")
 
