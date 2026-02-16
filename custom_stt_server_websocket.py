@@ -201,9 +201,8 @@ async def get_ws_token():
 
 async def run_voice_agent(websocket: WebSocket):
     """Run the voice agent with WebSocket transport"""
-    
-    await websocket.accept()
-    logger.info("✅ WebSocket connection accepted")
+
+    logger.info("✅ WebSocket connection started")
     
     # VAD for voice activity detection
     vad = SileroVADAnalyzer(params=VADParams(confidence=0.6, start_secs=0.1, stop_secs=0.4))
@@ -290,12 +289,13 @@ async def run_voice_agent(websocket: WebSocket):
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for voice agent"""
+    logger.info(f"🔌 New WebSocket connection from {websocket.client}")
     try:
         await run_voice_agent(websocket)
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected normally")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}", exc_info=True)
 
 import uvicorn
 if __name__ == "__main__":
