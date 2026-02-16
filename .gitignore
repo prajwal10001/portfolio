@@ -32,8 +32,10 @@ nul
 *.mp3
 *.wav
 
-# Python files (not part of portfolio)
+# Python files (not part of portfolio) - but allow server files
 *.py
+!custom_stt_server_websocket.py
+!requirements.txt
 
 # Misc generated files
 translated_output_report.txt
