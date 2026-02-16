@@ -1,0 +1,28 @@
+services:
+  # WebSocket Voice Agent Backend
+  - type: web
+    name: portfolio-voice-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn custom_stt_server_websocket:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: AZURE_SPEECH_KEY
+        sync: false
+      - key: AZURE_SPEECH_REGION
+        sync: false
+      - key: AZURE_OPENAI_API_KEY
+        sync: false
+      - key: AZURE_OPENAI_ENDPOINT
+        sync: false
+      - key: AZURE_OPENAI_DEPLOYMENT
+        value: gpt-35-turbo
+      - key: AZURE_OPENAI_API_VERSION
+        value: 2024-02-15-preview
+      - key: CARTESIA_API_KEY
+        sync: false
+      - key: CARTESIA_VOICE_ID
+        value: f786b574-daa5-4673-aa0c-cbe3e8534c02
+    healthCheckPath: /

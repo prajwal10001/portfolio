@@ -5,6 +5,8 @@
 [build.environment]
   PYTHON_VERSION = "3.11"
   NODE_VERSION = "20"
+  # Backend WebSocket URL - UPDATE THIS after Render.com deployment
+  VITE_BACKEND_URL = "https://your-render-app-name.onrender.com"
 
 # SPA routing - serve index.html for all routes
 [[redirects]]
