@@ -6,7 +6,7 @@
   PYTHON_VERSION = "3.11"
   NODE_VERSION = "20"
   # Backend WebSocket URL
-  VITE_BACKEND_URL = "https://portfolio-5in2.onrender.com"
+  VITE_BACKEND_URL = "https://portfolio-51n2.onrender.com"
 
 # SPA routing - serve index.html for all routes
 [[redirects]]
