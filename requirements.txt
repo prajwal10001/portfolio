@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 python-dotenv
-pipecat-ai[azure,openai,cartesia,silero,websocket]>=0.0.100
+pipecat-ai[azure,openai,cartesia,silero,websocket,smallwebrtc]>=0.0.100
 pymongo
 pyjwt
 openai

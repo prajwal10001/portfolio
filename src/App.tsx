@@ -5,7 +5,8 @@ import { Badge } from '@/component/ui/badge';
 import { Input } from '@/component/ui/input';
 import { Textarea } from '@/component/ui/textarea';
 import { WaveBackground } from '@/component/WaveBackground';
-import { VoiceAgentWebSocket } from '@/component/VoiceAgentWebSocket';
+// import { VoiceAgentWebSocket } from '@/component/VoiceAgentWebSocket';
+import { VoiceAgent } from '@/component/VoiceAgent';
 // import PipecatVoiceAgent from '@/component/PipecatVoiceAgent';
 import {
     Github,
@@ -55,18 +56,20 @@ const projects = [
 // Hero content for cycling
 const heroStates = [
     {
-        badge: 'AI Assistant',
-        titleLine1: 'Talk to',
-        titleLine2: 'Maya',
-        subtitle: 'To know about my experience and projects.',
-        showButtons: false,
-    },
-    {
         badge: 'AI Engineer & Architect',
         titleLine1: 'Prajwal',
         titleLine2: 'Mandale',
         subtitle: 'AI Engineer & Architect specializing in Generative AI, LLMs, and Scalable Infrastructure.',
         showButtons: true,
+        showMayaButton: false,
+    },
+    {
+        badge: 'AI Assistant',
+        titleLine1: 'Talk to',
+        titleLine2: 'Maya',
+        subtitle: 'To know about my experience and projects.',
+        showButtons: false,
+        showMayaButton: true,
     },
 ];
 
@@ -97,10 +100,10 @@ function App() {
         <div className="min-h-screen text-foreground relative overflow-x-hidden">
             {/* Navigation */}
             <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-white/10">
-                <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <span className="font-semibold text-lg">prajwal mandale</span>
-                        <div className="flex items-center gap-4">
+                <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 sm:gap-6">
+                        <span className="font-semibold text-sm sm:text-lg whitespace-nowrap">Prajwal Shivaji Mandale</span>
+                        <div className="hidden sm:flex items-center gap-4">
                             <a href="https://github.com/prajwal10001" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
                                 <Github className="size-5" />
                             </a>
@@ -112,14 +115,22 @@ function App() {
                             </a>
                         </div>
                     </div>
-                    <div className="flex items-center gap-6">
-                        <a href="#projects" className="text-muted-foreground hover:text-foreground transition-colors">
+                    <div className="flex items-center gap-3 sm:gap-6">
+                        <div className="flex sm:hidden items-center gap-3">
+                            <a href="https://github.com/prajwal10001" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                                <Github className="size-4" />
+                            </a>
+                            <a href="https://www.linkedin.com/in/prajwal-mandale" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                                <Linkedin className="size-4" />
+                            </a>
+                        </div>
+                        <a href="#projects" className="hidden sm:block text-muted-foreground hover:text-foreground transition-colors">
                             Projects
                         </a>
                         <button className="text-muted-foreground hover:text-foreground transition-colors">
-                            <Moon className="size-5" />
+                            <Moon className="size-4 sm:size-5" />
                         </button>
-                        <Button className="rounded-full bg-primary/40 border border-primary/50 backdrop-blur-md hover:bg-primary/50 btn-shine">
+                        <Button className="hidden sm:inline-flex rounded-full bg-primary/40 border border-primary/50 backdrop-blur-md hover:bg-primary/50 btn-shine">
                             Reach Out
                         </Button>
                     </div>
@@ -141,7 +152,7 @@ function App() {
 
                     {/* Central Glow */}
                     <div
-                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full pointer-events-none"
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] sm:w-[800px] h-[250px] sm:h-[400px] rounded-full pointer-events-none"
                         style={{ background: 'radial-gradient(rgba(138, 40, 48, 0.25) 0%, rgba(178, 52, 62, 0.1) 40%, rgba(0, 0, 0, 0) 70%)' }}
                     />
                 </div>
@@ -162,7 +173,7 @@ function App() {
                 </div>
 
                 {/* Content with Transitions */}
-                <div className="container relative z-10 mx-auto px-4 py-16 md:py-24">
+                <div className="container relative z-10 mx-auto px-5 sm:px-4 py-12 sm:py-16 md:py-24">
                     <div className="relative mx-auto max-w-4xl text-center">
 
                         {/* Badge - with transition */}
@@ -176,7 +187,7 @@ function App() {
 
                         {/* Heading - with transition */}
                         <h1
-                            className={`mb-6 font-serif text-4xl font-bold leading-[1.1] tracking-tight md:text-5xl lg:text-6xl xl:text-7xl text-white transition-all duration-500 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+                            className={`mb-4 sm:mb-6 font-serif text-3xl sm:text-4xl font-bold leading-[1.1] tracking-tight md:text-5xl lg:text-6xl xl:text-7xl text-white transition-all duration-500 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
                                 }`}
                             style={{ transitionDelay: isVisible ? '100ms' : '0ms' }}
                         >
@@ -186,7 +197,7 @@ function App() {
 
                         {/* Subheading - with transition */}
                         <p
-                            className={`mx-auto mb-10 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl transition-all duration-500 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+                            className={`mx-auto mb-8 sm:mb-10 max-w-2xl text-base sm:text-lg leading-relaxed text-muted-foreground md:text-xl transition-all duration-500 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
                                 }`}
                             style={{ transitionDelay: isVisible ? '200ms' : '0ms' }}
                         >
@@ -195,7 +206,7 @@ function App() {
 
                         {/* Buttons - with transition, only show on second state */}
                         <div
-                            className={`flex flex-col items-center justify-center gap-4 sm:flex-row transition-all duration-500 ease-out ${isVisible && hero.showButtons ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+                            className={`flex flex-col items-center justify-center gap-4 sm:flex-row transition-all duration-500 ease-out ${isVisible && hero.showButtons ? 'opacity-100 translate-y-0 max-h-40' : 'opacity-0 translate-y-4 pointer-events-none max-h-0 overflow-hidden'
                                 }`}
                             style={{ transitionDelay: isVisible ? '300ms' : '0ms' }}
                         >
@@ -214,6 +225,21 @@ function App() {
                                 Talk to Maya
                             </button>
                         </div>
+
+                        {/* Talk to Maya button - only on Maya hero state */}
+                        <div
+                            className={`flex items-center justify-center transition-all duration-500 ease-out ${isVisible && hero.showMayaButton ? 'opacity-100 translate-y-0 max-h-40' : 'opacity-0 translate-y-4 pointer-events-none max-h-0 overflow-hidden'
+                                }`}
+                            style={{ transitionDelay: isVisible ? '300ms' : '0ms' }}
+                        >
+                            <button
+                                onClick={() => setIsVoiceAgentOpen(true)}
+                                className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer rounded-full h-14 px-10 text-base bg-primary/40 border border-primary/50 backdrop-blur-md hover:bg-primary/50 hover:border-primary/60 text-white transition-all duration-300 btn-shine shadow-[0_0_30px_-5px] shadow-primary/30 hover:shadow-[0_0_40px_-5px] hover:shadow-primary/40"
+                            >
+                                <Mic className="h-5 w-5" />
+                                Talk to Maya
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -222,16 +248,16 @@ function App() {
             </section>
 
             {/* Projects Section */}
-            <section id="projects" className="relative py-24 px-4">
+            <section id="projects" className="relative py-16 sm:py-24 px-4">
                 <div className="absolute inset-0 bg-background" />
                 <div className="pointer-events-none absolute inset-0 bg-grid mask-radial-faded opacity-20" />
 
                 <div className="container mx-auto relative z-10">
-                    <h2 className="font-serif text-5xl md:text-6xl text-center mb-16 text-white font-bold">
+                    <h2 className="font-serif text-3xl sm:text-5xl md:text-6xl text-center mb-10 sm:mb-16 text-white font-bold">
                         Selected <span className="gradient-text">Works</span>
                     </h2>
 
-                    <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-8 max-w-5xl mx-auto">
                         {projects.map((project, index) => (
                             <Card
                                 key={index}
@@ -283,15 +309,15 @@ function App() {
             </section>
 
             {/* Contact Section */}
-            <section id="contact" className="relative py-24 px-4">
+            <section id="contact" className="relative py-16 sm:py-24 px-4">
                 <div className="absolute inset-0 bg-background" />
                 <div className="pointer-events-none absolute inset-0 bg-grid mask-radial-faded opacity-20" />
 
                 <div className="container mx-auto max-w-xl relative z-10">
-                    <h2 className="font-serif text-5xl md:text-6xl text-center mb-4 text-white font-bold">
+                    <h2 className="font-serif text-3xl sm:text-5xl md:text-6xl text-center mb-4 text-white font-bold">
                         Let's <span className="gradient-text">Chat</span>
                     </h2>
-                    <p className="text-center text-muted-foreground mb-12">
+                    <p className="text-center text-muted-foreground mb-8 sm:mb-12 text-sm sm:text-base">
                         Have a project in mind? Send me a message.
                     </p>
 
@@ -344,12 +370,12 @@ function App() {
             <footer className="relative border-t border-white/10 py-8">
                 <div className="absolute inset-0 bg-background" />
                 <div className="container mx-auto px-4 text-center text-muted-foreground relative z-10">
-                    <p>© 2026 Prajwal Mandale. Built with React & TailwindCSS.</p>
+                    <p className="text-sm sm:text-base">© 2026 Prajwal Mandale. Built with React & TailwindCSS.</p>
                 </div>
             </footer>
 
             {/* Voice Agent Modal - WebSocket Version */}
-            <VoiceAgentWebSocket
+            <VoiceAgent
                 isOpen={isVoiceAgentOpen}
                 onClose={() => setIsVoiceAgentOpen(false)}
             />

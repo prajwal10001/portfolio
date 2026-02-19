@@ -17,6 +17,7 @@ from pymongo import MongoClient
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncAzureOpenAI
 from cartesia import AsyncCartesia
+from aiortc import RTCIceServer
 
 # Pipecat imports
 from pipecat.pipeline.pipeline import Pipeline
@@ -232,10 +233,13 @@ async def get_ws_token(request: Request):
     return JSONResponse({"token": token, "expires_in": 600})
 
 small_webrtc_handler = SmallWebRTCRequestHandler(
+    host="80.225.213.197",
     ice_servers=[
-        "stun:stun.l.google.com:19302",
-        "stun:stun1.l.google.com:19302",
-        "stun:stun2.l.google.com:19302",
+        RTCIceServer(urls="stun:stun.l.google.com:19302"),
+        RTCIceServer(urls="stun:stun1.l.google.com:19302"),
+        RTCIceServer(urls="turn:openrelay.metered.ca:80", username="openrelayproject", credential="openrelayproject"),
+        RTCIceServer(urls="turn:openrelay.metered.ca:443", username="openrelayproject", credential="openrelayproject"),
+        RTCIceServer(urls="turns:openrelay.metered.ca:443", username="openrelayproject", credential="openrelayproject"),
     ]
 )
 
@@ -272,6 +276,7 @@ async def run_voice_agent(webrtc_connection: SmallWebRTCConnection):
         voice_id=CARTESIA_VOICE_ID,
         model_id="sonic-3",
         sample_rate=24000,
+        speed="normal",
     )
 
     messages = [
